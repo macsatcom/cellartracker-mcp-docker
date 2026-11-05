@@ -1,0 +1,124 @@
+name: Track upstream release and publish image
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  check-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Get latest cellartracker-mcp version from npm
+        id: upstream
+        run: |
+          VERSION=$(curl -s https://registry.npmjs.org/cellartracker-mcp/latest | jq -r '.version')
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "Failed to fetch latest version from npm registry" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Get currently pinned version
+        id: current
+        run: |
+          CURRENT=$(grep -oP '^ARG CT_MCP_VERSION=\K.*' Dockerfile)
+          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          # Deliberate exact-match comparison, not a semver "is upstream newer" check:
+          # this workflow's purpose is to always mirror whatever npm currently
+          # publishes as `latest` for cellartracker-mcp, including the (unlikely)
+          # case of a downgrade if upstream ever unpublishes/retags a bad release.
+          if [ "${{ steps.upstream.outputs.version }}" = "${{ steps.current.outputs.version }}" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Up to date: cellartracker-mcp ${{ steps.current.outputs.version }} is still the latest."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "New version detected: ${{ steps.current.outputs.version }} -> ${{ steps.upstream.outputs.version }}"
+          fi
+
+      - name: Compute lowercase image repository
+        if: steps.compare.outputs.changed == 'true'
+        id: image
+        run: |
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "repo=ghcr.io/${OWNER_LC}/cellartracker-mcp-docker" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        if: steps.compare.outputs.changed == 'true'
+        uses: docker/setup-qemu-action@v4.4.0
+
+      - name: Set up Docker Buildx
+        if: steps.compare.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v4.4.1
+
+      - name: Log in to GitHub Container Registry
+        if: steps.compare.outputs.changed == 'true'
+        uses: docker/login-action@v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch image
+        if: steps.compare.outputs.changed == 'true'
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            CT_MCP_VERSION=${{ steps.upstream.outputs.version }}
+          tags: |
+            ${{ steps.image.outputs.repo }}:${{ steps.upstream.outputs.version }}
+            ${{ steps.image.outputs.repo }}:latest
+
+      - name: Bump pinned version in repo
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          NEW_VERSION="${{ steps.upstream.outputs.version }}"
+          sed -i "s/^ARG CT_MCP_VERSION=.*/ARG CT_MCP_VERSION=${NEW_VERSION}/" Dockerfile
+          sed -i "s/CT_MCP_VERSION: \"[0-9.]*\"/CT_MCP_VERSION: \"${NEW_VERSION}\"/" docker-compose.yml
+          sed -i "s/image: cellartracker-mcp-docker:[0-9.]*/image: cellartracker-mcp-docker:${NEW_VERSION}/" docker-compose.yml
+
+      - name: Verify docker-compose.yml was actually updated
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          if git diff --exit-code -- docker-compose.yml; then
+            echo "::error::docker-compose.yml was not updated by the version-bump sed commands — check the sed patterns still match the file's current format"
+            exit 1
+          fi
+
+      - name: Commit and push version bump
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Dockerfile docker-compose.yml
+          git commit -m "chore: bump cellartracker-mcp to v${{ steps.upstream.outputs.version }}"
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Create GitHub Release
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.upstream.outputs.version }}"
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes "Tracks [cellartracker-mcp v${VERSION}](https://github.com/slavins-co/cellartracker-mcp/releases/tag/v${VERSION}). Image: \`${{ steps.image.outputs.repo }}:${VERSION}\`."
