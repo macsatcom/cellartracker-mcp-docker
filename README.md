@@ -54,6 +54,23 @@ API with auto-generated OpenAPI docs instead.
 
    Or open `http://localhost:8000/docs` in a browser for interactive Swagger docs.
 
+## Pre-built images
+
+Instead of `docker compose build`, you can skip building locally and pull a pre-built,
+automatically-updated image from GitHub Container Registry:
+
+```
+ghcr.io/macsatcom/cellartracker-mcp-docker:latest
+ghcr.io/macsatcom/cellartracker-mcp-docker:0.5.4   # or any specific cellartracker-mcp version
+```
+
+These are built and published automatically by
+[`.github/workflows/release.yml`](.github/workflows/release.yml) whenever a new
+`cellartracker-mcp` version is published to npm (checked every 6 hours), for both
+`linux/amd64` and `linux/arm64`. `docker-compose.yml` in this repo still builds locally
+by default; to use a pre-built image instead, replace the service's `build:` block with
+`image: ghcr.io/macsatcom/cellartracker-mcp-docker:latest`.
+
 ## Registering in Open WebUI
 
 Open WebUI distinguishes **User Tool Servers** (personal, connected directly from your
