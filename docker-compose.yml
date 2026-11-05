@@ -1,0 +1,28 @@
+services:
+  cellartracker-mcp:
+    build:
+      context: .
+      args:
+        CT_MCP_VERSION: "0.5.4"
+    image: cellartracker-mcp-docker:0.5.4
+    env_file:
+      - .env
+    ports:
+      # Bound to 127.0.0.1 by default: this assumes Open WebUI runs on the
+      # same host. If Open WebUI runs elsewhere (another host, or a separate
+      # compose project on the same Docker network), change this to
+      # "${PORT:-8000}:8000" to bind all interfaces, or attach both services
+      # to a shared Docker network instead of publishing a host port at all.
+      - "127.0.0.1:${PORT:-8000}:8000"
+    volumes:
+      - cellartracker-cache:/data/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/openapi.json"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  cellartracker-cache:
