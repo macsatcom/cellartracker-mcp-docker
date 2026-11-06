@@ -136,14 +136,16 @@ Where "localhost" resolves to depends on which registration option you used abov
   backend itself runs in a container, its `localhost` is not this host — use
   `http://host.docker.internal:8000` (Docker Desktop) or this host's real LAN IP.
 
-By default `docker-compose.yml` binds this container's port to `127.0.0.1` only (i.e.
-reachable from processes on this host, not the rest of your LAN). If Open WebUI's
-backend runs in a different container or a different machine and needs to reach this
-service by IP or `host.docker.internal`, change the port mapping in
-`docker-compose.yml` from `"127.0.0.1:${PORT:-8000}:8000"` to `"${PORT:-8000}:8000"` to
-bind all interfaces. Alternatively, attach both services to a shared Docker network and
-have Open WebUI reach this service by its container/service name
-(`http://cellartracker-mcp:8000`) — this avoids publishing a host port at all.
+By default `docker-compose.yml` binds this container's port to all interfaces (i.e.
+reachable from other devices on your LAN, not just this host) — needed for the common
+case where Open WebUI runs on a different machine or in a separate container. This does
+mean anyone on your local network can reach the API, so keep `MCPO_API_KEY` set in
+`.env` unless you fully trust everyone on it. If you only ever access this from the same
+host Open WebUI runs on, you can tighten the port mapping in `docker-compose.yml` from
+`"${PORT:-8000}:8000"` back to `"127.0.0.1:${PORT:-8000}:8000"` instead. Alternatively,
+attach both services to a shared Docker network and have Open WebUI reach this service
+by its container/service name (`http://cellartracker-mcp:8000`) — this avoids
+publishing a host port at all.
 
 ## Data persistence
 
@@ -176,6 +178,9 @@ docker compose up -d
 
 - Credentials live only in your local, gitignored `.env` file.
 - The container runs as a non-root user.
+- The port is published on all network interfaces by default (see
+  [Networking note](#networking-note)) — reachable by anything on your LAN, not just
+  this host.
 - This server authenticates to CellarTracker with your real account password (no scoped
   tokens exist). Use a unique password for CellarTracker and keep `MCPO_API_KEY` set
   unless you fully trust your local network.

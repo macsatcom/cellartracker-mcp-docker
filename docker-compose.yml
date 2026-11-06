@@ -12,12 +12,13 @@ services:
     env_file:
       - .env
     ports:
-      # Bound to 127.0.0.1 by default: this assumes Open WebUI runs on the
-      # same host. If Open WebUI runs elsewhere (another host, or a separate
-      # compose project on the same Docker network), change this to
-      # "${PORT:-8000}:8000" to bind all interfaces, or attach both services
-      # to a shared Docker network instead of publishing a host port at all.
-      - "127.0.0.1:${PORT:-8000}:8000"
+      # Bound to all interfaces so other devices on your LAN (e.g. a separate
+      # machine/container running Open WebUI) can reach this. Security note:
+      # this exposes the API to anyone on your local network — keep
+      # MCPO_API_KEY set in .env unless you fully trust everyone on it. If
+      # you only ever access this from the same host, you can tighten this
+      # back to "127.0.0.1:${PORT:-8000}:8000" instead.
+      - "${PORT:-8000}:8000"
     volumes:
       - cellartracker-cache:/data/cache
     restart: unless-stopped
