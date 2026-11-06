@@ -29,11 +29,14 @@ API with auto-generated OpenAPI docs instead.
      local network.
    - `PORT` — host port to publish (container always listens on 8000 internally).
 
-2. Build and start:
+2. Start it:
 
    ```bash
-   docker compose up -d --build
+   docker compose up -d
    ```
+
+   This pulls the pre-built image from GitHub Container Registry (see
+   [Pre-built images](#pre-built-images) below) — no local build required.
 
 3. Confirm it's healthy:
 
@@ -56,20 +59,32 @@ API with auto-generated OpenAPI docs instead.
 
 ## Pre-built images
 
-Instead of `docker compose build`, you can skip building locally and pull a pre-built,
-automatically-updated image from GitHub Container Registry:
+`docker-compose.yml` pulls `ghcr.io/macsatcom/cellartracker-mcp-docker:latest` by
+default — a pre-built, multi-arch (`linux/amd64` + `linux/arm64`) image published
+automatically by [`.github/workflows/release.yml`](.github/workflows/release.yml)
+whenever a new `cellartracker-mcp` version is published to npm (checked every 6 hours).
+There's nothing to build locally; `docker compose up -d` just pulls and runs it.
 
-```
-ghcr.io/macsatcom/cellartracker-mcp-docker:latest
-ghcr.io/macsatcom/cellartracker-mcp-docker:0.5.4   # or any specific cellartracker-mcp version
+To pick up a version newer than what you last pulled:
+
+```bash
+docker compose pull
+docker compose up -d
 ```
 
-These are built and published automatically by
-[`.github/workflows/release.yml`](.github/workflows/release.yml) whenever a new
-`cellartracker-mcp` version is published to npm (checked every 6 hours), for both
-`linux/amd64` and `linux/arm64`. `docker-compose.yml` in this repo still builds locally
-by default; to use a pre-built image instead, replace the service's `build:` block with
-`image: ghcr.io/macsatcom/cellartracker-mcp-docker:latest`.
+Specific version tags are also published, e.g.
+`ghcr.io/macsatcom/cellartracker-mcp-docker:0.5.4`, if you want to pin to one instead of
+always tracking `:latest`.
+
+If you'd rather build from source yourself instead of pulling, replace
+`docker-compose.yml`'s `image:` line with:
+```yaml
+    build:
+      context: .
+      args:
+        CT_MCP_VERSION: "0.5.4"   # or any cellartracker-mcp version
+```
+then run `docker compose up -d --build`.
 
 ## Registering in Open WebUI
 
@@ -147,12 +162,15 @@ docker compose up -d
 
 ## Updating versions
 
-- **cellartracker-mcp:** bump the `CT_MCP_VERSION` build arg in `docker-compose.yml`
-  (and optionally pin a specific release per the upstream README's recommendation), then
-  `docker compose up -d --build`.
-- **mcpo base image:** update the `FROM` line in `Dockerfile` to a newer
-  `ghcr.io/open-webui/mcpo:git-<short-sha>` tag (find the latest commit at
-  https://github.com/open-webui/mcpo), then rebuild.
+- **cellartracker-mcp:** nothing to do manually — the release workflow republishes
+  `:latest` automatically whenever upstream ships a new version. Run
+  `docker compose pull && docker compose up -d` whenever you want to pick up the newest
+  published image (see [Pre-built images](#pre-built-images)). If you switched to
+  building locally instead, bump the `CT_MCP_VERSION` build arg in `docker-compose.yml`
+  and run `docker compose up -d --build`.
+- **mcpo base image:** only relevant if you're building locally. Update the `FROM` line
+  in `Dockerfile` to a newer `ghcr.io/open-webui/mcpo:git-<short-sha>` tag (find the
+  latest commit at https://github.com/open-webui/mcpo), then rebuild.
 
 ## Security
 

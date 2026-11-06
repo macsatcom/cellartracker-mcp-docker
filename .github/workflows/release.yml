@@ -91,16 +91,17 @@ jobs:
       - name: Bump pinned version in repo
         if: steps.compare.outputs.changed == 'true'
         run: |
+          # Only the Dockerfile needs bumping: docker-compose.yml no longer
+          # builds locally (it pulls the :latest tag this job just pushed),
+          # so there is nothing version-specific left in it to keep in sync.
           NEW_VERSION="${{ steps.upstream.outputs.version }}"
           sed -i "s/^ARG CT_MCP_VERSION=.*/ARG CT_MCP_VERSION=${NEW_VERSION}/" Dockerfile
-          sed -i "s/CT_MCP_VERSION: \"[0-9.]*\"/CT_MCP_VERSION: \"${NEW_VERSION}\"/" docker-compose.yml
-          sed -i "s/image: cellartracker-mcp-docker:[0-9.]*/image: cellartracker-mcp-docker:${NEW_VERSION}/" docker-compose.yml
 
-      - name: Verify docker-compose.yml was actually updated
+      - name: Verify Dockerfile was actually updated
         if: steps.compare.outputs.changed == 'true'
         run: |
-          if git diff --exit-code -- docker-compose.yml; then
-            echo "::error::docker-compose.yml was not updated by the version-bump sed commands — check the sed patterns still match the file's current format"
+          if git diff --exit-code -- Dockerfile; then
+            echo "::error::Dockerfile was not updated by the version-bump sed command — check the sed pattern still matches the file's current format"
             exit 1
           fi
 
@@ -109,7 +110,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Dockerfile docker-compose.yml
+          git add Dockerfile
           git commit -m "chore: bump cellartracker-mcp to v${{ steps.upstream.outputs.version }}"
           git push origin HEAD:${{ github.ref_name }}
 

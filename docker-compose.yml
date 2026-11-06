@@ -1,10 +1,14 @@
 services:
   cellartracker-mcp:
-    build:
-      context: .
-      args:
-        CT_MCP_VERSION: "0.5.4"
-    image: cellartracker-mcp-docker:0.5.4
+    # Pulls the pre-built, multi-arch (amd64+arm64) image that
+    # .github/workflows/release.yml publishes automatically whenever a new
+    # cellartracker-mcp version ships. To build locally from source instead,
+    # replace this `image:` line with:
+    #   build:
+    #     context: .
+    #     args:
+    #       CT_MCP_VERSION: "X.Y.Z"   # see Dockerfile's current pinned version
+    image: ghcr.io/macsatcom/cellartracker-mcp-docker:latest
     env_file:
       - .env
     ports:
